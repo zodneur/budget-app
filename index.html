@@ -408,6 +408,9 @@
 
                 const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
                 const dailyAllowance = monthlyBudget / daysInMonth;
+                const today = new Date().toISOString().split('T')[0];
+                const todayDate = new Date(today);
+                const todayDay = todayDate.getDate();
 
                 document.getElementById('monthlyBudgetInput').value = monthlyBudget;
                 document.getElementById('monthlyBudgetDisplay').textContent = `$${monthlyBudget.toFixed(2)}`;
@@ -418,19 +421,34 @@
                 const logHtml = [];
                 const dailyData = [];
 
-                for (let day = 1; day <= daysInMonth; day++) {
+                // Calculate data from day 1 to today
+                for (let day = 1; day <= todayDay; day++) {
                     const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
                     const log = logs.find(l => l.date === dateStr);
-                    const spent = log ? log.amount : 0;
-                    const difference = dailyAllowance - spent;
-                    cumulativeBalance += difference;
-                    totalSpent += spent;
 
-                    dailyData.push({
-                        date: dateStr,
-                        fixed: dailyAllowance,
-                        cumulative: cumulativeBalance + dailyAllowance
-                    });
+                    if (day < todayDay) {
+                        // Past days: assume perfect budget adherence
+                        const spent = dailyAllowance;
+                        totalSpent += spent;
+
+                        dailyData.push({
+                            date: dateStr,
+                            fixed: dailyAllowance,
+                            cumulative: dailyAllowance
+                        });
+                    } else {
+                        // Today: use logged data if exists, else show daily allowance
+                        const spent = log ? log.amount : dailyAllowance;
+                        totalSpent += spent;
+                        const difference = dailyAllowance - spent;
+                        cumulativeBalance += difference;
+
+                        dailyData.push({
+                            date: dateStr,
+                            fixed: dailyAllowance,
+                            cumulative: dailyAllowance + cumulativeBalance
+                        });
+                    }
 
                     if (log) {
                         const dateObj = new Date(dateStr);
@@ -438,29 +456,13 @@
                         logHtml.push(`
                             <div class="log-entry">
                                 <div class="log-entry-date">${dayName}</div>
-                                <div class="log-entry-amount">$${spent.toFixed(2)}</div>
+                                <div class="log-entry-amount">$${log.amount.toFixed(2)}</div>
                             </div>
                         `);
                     }
                 }
 
-                const today = new Date().toISOString().split('T')[0];
-                const todayLog = logs.find(l => l.date === today);
-                let todayBudget = dailyAllowance;
-                if (todayLog) {
-                    const todayIndex = dailyData.findIndex(d => d.date === today);
-                    if (todayIndex >= 0) {
-                        todayBudget = dailyData[todayIndex].cumulative;
-                    }
-                } else {
-                    if (dailyData.length > 0) {
-                        const lastDay = dailyData.findIndex(d => d.date === today);
-                        if (lastDay > 0) {
-                            todayBudget = dailyData[lastDay - 1].cumulative + dailyAllowance;
-                        }
-                    }
-                }
-
+                const todayBudget = dailyData.length > 0 ? dailyData[dailyData.length - 1].cumulative : dailyAllowance;
                 document.getElementById('dailyCumulativeDisplay').textContent = `$${todayBudget.toFixed(2)}`;
                 document.getElementById('logList').innerHTML = logHtml.join('');
 
