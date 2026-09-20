@@ -94,7 +94,7 @@
         }
         .stats {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 12px;
             margin-bottom: 24px;
         }
@@ -255,6 +255,24 @@
             padding: 40px 20px;
             color: #999;
         }
+        .stat-box.balance-positive {
+            border-left-color: #10b981;
+        }
+        .stat-box.balance-positive .stat-value {
+            color: #10b981;
+        }
+        .stat-box.balance-negative {
+            border-left-color: #ef4444;
+        }
+        .stat-box.balance-negative .stat-value {
+            color: #ef4444;
+        }
+        .day-row.projected {
+            opacity: 0.6;
+        }
+        .day-row.projected .day-value {
+            color: #999;
+        }
     </style>
 </head>
 <body>
@@ -297,6 +315,10 @@
                     <div class="stat-box">
                         <div class="stat-label">Today's Budget</div>
                         <div class="stat-value" id="dailyCumulativeDisplay">$0</div>
+                    </div>
+                    <div class="stat-box" id="todayBalanceBox">
+                        <div class="stat-label">Today's Balance</div>
+                        <div class="stat-value" id="todayBalanceDisplay">$0</div>
                     </div>
                 </div>
 
@@ -495,21 +517,33 @@
                 let rollover = 0;
                 let totalSpent = 0;
                 let todayBudget = dailyAllowance;
+                let todaySpent = 0;
                 const logHtml = [];
-                const dailyData = [];
+                const labels = [];
+                const fixedData = [];
+                const cumulativeData = [];
 
-                for (let day = 1; day <= todayDay; day++) {
+                // Walk the whole month. Days up to today use real logs (unlogged = perfect
+                // adherence); days after today are a projection assuming no over/underspending.
+                for (let day = 1; day <= daysInMonth; day++) {
                     const dateStr = `${currentMonth}-${pad(day)}`;
                     const log = logs.find(l => l.date === dateStr);
                     const budgetForDay = dailyAllowance + rollover;
                     const spent = log ? log.amount : dailyAllowance;
 
-                    totalSpent += spent;
-                    dailyData.push({ date: dateStr, fixed: dailyAllowance, cumulative: budgetForDay });
-                    if (day === todayDay) todayBudget = budgetForDay;
+                    labels.push(day);
+                    fixedData.push(dailyAllowance);
+                    cumulativeData.push(budgetForDay);
+
+                    if (day === todayDay) {
+                        todayBudget = budgetForDay;
+                        todaySpent = log ? log.amount : 0;
+                    }
+                    if (day <= todayDay) totalSpent += spent;
+
                     rollover += (dailyAllowance - spent);
 
-                    if (log) {
+                    if (log && day <= todayDay) {
                         const dayName = parseLocal(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                         logHtml.push(`
                             <div class="log-entry">
@@ -520,32 +554,36 @@
                     }
                 }
 
+                const todayBalance = todayBudget - todaySpent;
                 document.getElementById('dailyCumulativeDisplay').textContent = `$${todayBudget.toFixed(2)}`;
+
+                const balanceBox = document.getElementById('todayBalanceBox');
+                const sign = todayBalance >= 0 ? '+' : '-';
+                document.getElementById('todayBalanceDisplay').textContent = `${sign}$${Math.abs(todayBalance).toFixed(2)}`;
+                balanceBox.classList.remove('balance-positive', 'balance-negative');
+                balanceBox.classList.add(todayBalance >= 0 ? 'balance-positive' : 'balance-negative');
+
                 document.getElementById('logList').innerHTML = logHtml.join('') || '<div class="empty-state">No spending logged yet</div>';
 
-                updateDailyChart(dailyData, dailyAllowance);
+                updateDailyChart(labels, fixedData, cumulativeData, todayDay);
                 updateMonthlyChart(monthlyBudget, totalSpent);
             } catch (error) {
                 console.error('Load error:', error);
             }
         }
 
-        function updateDailyChart(dailyData, dailyAllowance) {
+        function updateDailyChart(labels, fixedData, cumulativeData, todayDay) {
             const ctx = document.getElementById('dailyChart');
             if (!ctx) return;
 
-            const labels = dailyData.map(d => {
-                const date = new Date(d.date);
-                return date.getDate();
-            });
-
-            const fixedData = dailyData.map(d => d.fixed);
-            const cumulativeData = dailyData.map(d => d.cumulative);
+            const dashFrom = todayDay - 1; // 0-based index of today; segments from here on are projected
+            const dashSegment = { borderDash: c => c.p0DataIndex >= dashFrom ? [6, 6] : undefined };
 
             if (dailyChart) {
                 dailyChart.data.labels = labels;
                 dailyChart.data.datasets[0].data = fixedData;
                 dailyChart.data.datasets[1].data = cumulativeData;
+                dailyChart.data.datasets[1].segment = dashSegment;
                 dailyChart.update();
             } else {
                 dailyChart = new Chart(ctx, {
@@ -558,22 +596,26 @@
                                 data: fixedData,
                                 borderColor: '#667eea',
                                 backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2
+                                tension: 0.1,
+                                borderWidth: 2,
+                                pointRadius: 0
                             },
                             {
-                                label: 'Daily Cumulative Budget',
+                                label: 'Daily Cumulative Budget (dashed = projected)',
                                 data: cumulativeData,
                                 borderColor: '#10b981',
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2
+                                tension: 0.1,
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                segment: dashSegment
                             }
                         ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: { intersect: false, mode: 'index' },
                         plugins: {
                             legend: {
                                 position: 'top',
@@ -581,7 +623,7 @@
                         },
                         scales: {
                             y: {
-                                beginAtZero: true
+                                beginAtZero: false
                             }
                         }
                     }
@@ -656,7 +698,6 @@
                     const daysInMonth = new Date(my, mm, 0).getDate();
                     const dailyAllowance = monthlyBudget / daysInMonth;
                     const isCurrent = monthId === currentMonthStr;
-                    const lastDay = isCurrent ? todayDay : daysInMonth;
 
                     html += `
                         <div class="month-section">
@@ -668,23 +709,24 @@
                                     <div>Day</div>
                                     <div style="text-align:right">Spent</div>
                                     <div style="text-align:right">Fixed</div>
-                                    <div style="text-align:right">Budget</div>
+                                    <div style="text-align:right">Cumulative</div>
                                 </div>
                     `;
 
                     let rollover = 0;
-                    for (let day = 1; day <= lastDay; day++) {
+                    for (let day = 1; day <= daysInMonth; day++) {
                         const dateStr = `${monthId}-${pad(day)}`;
                         const log = logs.find(l => l.date === dateStr);
                         const budgetForDay = dailyAllowance + rollover;
                         const spent = log ? log.amount : dailyAllowance;
                         rollover += (dailyAllowance - spent);
 
+                        const isFuture = isCurrent && day > todayDay;
                         const dayName = parseLocal(dateStr).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
                         const spentDisplay = log ? `$${log.amount.toFixed(2)}` : '—';
 
                         html += `
-                            <div class="day-row">
+                            <div class="day-row${isFuture ? ' projected' : ''}">
                                 <div class="day-label">${dayName}</div>
                                 <div class="day-value">${spentDisplay}</div>
                                 <div class="day-value">$${dailyAllowance.toFixed(2)}</div>
