@@ -69,9 +69,11 @@
             padding: 12px;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow-x: auto;
         }
         .nav button {
             flex: 1;
+            min-width: 100px;
             padding: 12px;
             background: #f0f0f0;
             color: #333;
@@ -198,6 +200,61 @@
             color: #999;
             font-size: 12px;
         }
+        .month-section {
+            margin-bottom: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .month-header {
+            background: #667eea;
+            color: white;
+            padding: 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+        }
+        .month-header:hover {
+            background: #5568d3;
+        }
+        .month-header.collapsed::after {
+            content: "▶";
+        }
+        .month-header.expanded::after {
+            content: "▼";
+        }
+        .month-content {
+            padding: 16px;
+            display: none;
+        }
+        .month-content.expanded {
+            display: block;
+        }
+        .day-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 8px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .day-label {
+            font-weight: 600;
+            color: #333;
+        }
+        .day-value {
+            text-align: right;
+            color: #667eea;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
     </style>
 </head>
 <body>
@@ -223,6 +280,7 @@
             <div class="nav">
                 <button class="active" onclick="switchPage('dashboard')">Dashboard</button>
                 <button onclick="switchPage('settings')">Settings & Log</button>
+                <button onclick="switchPage('history')">History</button>
             </div>
 
             <!-- Dashboard Page -->
@@ -278,13 +336,19 @@
                     </div>
                 </div>
             </div>
+
+            <!-- History Page -->
+            <div id="history" class="page hidden">
+                <div class="section-title">All Months</div>
+                <div id="historyContent"></div>
+            </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-        import { getFirestore, collection, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5FGCVlllBY6OKFmf6sYYc6-tixB9x9bg",
@@ -327,11 +391,19 @@
             if (page === 'dashboard') {
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.querySelectorAll('.nav button')[0].classList.add('active');
-                if (dailyChart) updateDailyChart();
-            } else {
+                setTimeout(() => {
+                    if (dailyChart) dailyChart.resize();
+                }, 100);
+            } else if (page === 'settings') {
                 document.getElementById('settings').classList.remove('hidden');
                 document.querySelectorAll('.nav button')[1].classList.add('active');
-                if (monthlyChart) updateMonthlyChart();
+                setTimeout(() => {
+                    if (monthlyChart) monthlyChart.resize();
+                }, 100);
+            } else if (page === 'history') {
+                document.getElementById('history').classList.remove('hidden');
+                document.querySelectorAll('.nav button')[2].classList.add('active');
+                loadHistoryPage();
             }
         };
 
@@ -421,13 +493,11 @@
                 const logHtml = [];
                 const dailyData = [];
 
-                // Calculate data from day 1 to today
                 for (let day = 1; day <= todayDay; day++) {
                     const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
                     const log = logs.find(l => l.date === dateStr);
 
                     if (day < todayDay) {
-                        // Past days: assume perfect budget adherence
                         const spent = dailyAllowance;
                         totalSpent += spent;
 
@@ -437,7 +507,6 @@
                             cumulative: dailyAllowance
                         });
                     } else {
-                        // Today: use logged data if exists, else show daily allowance
                         const spent = log ? log.amount : dailyAllowance;
                         totalSpent += spent;
                         const difference = dailyAllowance - spent;
@@ -569,6 +638,83 @@
                 });
             }
         }
+
+        async function loadHistoryPage() {
+            try {
+                const budgetsRef = collection(db, 'users', currentUser.uid, 'budgets');
+                const querySnapshot = await getDocs(budgetsRef);
+
+                if (querySnapshot.empty) {
+                    document.getElementById('historyContent').innerHTML = '<div class="empty-state">No data yet</div>';
+                    return;
+                }
+
+                const months = [];
+                querySnapshot.forEach(doc => {
+                    months.push({ id: doc.id, data: doc.data() });
+                });
+
+                months.sort((a, b) => b.id.localeCompare(a.id));
+
+                let html = '';
+                for (const month of months) {
+                    const monthId = month.id;
+                    const logs = month.data.logs || [];
+                    const monthlyBudget = month.data.monthlyBudget || 0;
+                    const daysInMonth = new Date(new Date(monthId + '-01').getFullYear(), new Date(monthId + '-01').getMonth() + 1, 0).getDate();
+                    const dailyAllowance = monthlyBudget / daysInMonth;
+
+                    html += `
+                        <div class="month-section">
+                            <div class="month-header collapsed" onclick="toggleMonth(this, '${monthId}')">
+                                ${monthId}
+                            </div>
+                            <div class="month-content" id="month-${monthId}">
+                    `;
+
+                    let cumulativeBalance = 0;
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const dateStr = `${monthId}-${String(day).padStart(2, '0')}`;
+                        const log = logs.find(l => l.date === dateStr);
+                        const spent = log ? log.amount : 0;
+                        const fixed = dailyAllowance;
+
+                        if (day <= new Date().getDate() && monthId === new Date().toISOString().slice(0, 7)) {
+                            const difference = dailyAllowance - spent;
+                            cumulativeBalance += difference;
+                        }
+                        const cumulative = cumulativeBalance + dailyAllowance;
+
+                        const date = new Date(dateStr);
+                        const dayName = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+                        html += `
+                            <div class="day-row">
+                                <div class="day-label">${dayName}</div>
+                                <div class="day-value">$${spent.toFixed(2)}</div>
+                                <div class="day-value">$${fixed.toFixed(2)}</div>
+                                <div class="day-value">$${cumulative.toFixed(2)}</div>
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                document.getElementById('historyContent').innerHTML = html;
+            } catch (error) {
+                console.error('History load error:', error);
+            }
+        }
+
+        window.toggleMonth = function(header, monthId) {
+            header.classList.toggle('collapsed');
+            header.classList.toggle('expanded');
+            document.getElementById(`month-${monthId}`).classList.toggle('expanded');
+        };
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
