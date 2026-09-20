@@ -348,7 +348,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-        import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC5FGCVlllBY6OKFmf6sYYc6-tixB9x9bg",
@@ -362,8 +362,13 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+
+        const pad = n => String(n).padStart(2, '0');
+        const localDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const parseLocal = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+
         let currentUser = null;
-        let currentMonth = new Date().toISOString().slice(0, 7);
+        let currentMonth = localDate(new Date()).slice(0, 7);
         let dailyChart = null;
         let monthlyChart = null;
 
@@ -431,13 +436,13 @@
 
         window.logSpending = async function() {
             const amount = parseFloat(document.getElementById('dailySpendingInput').value);
-            if (!amount || amount < 0) {
+            if (isNaN(amount) || amount < 0) {
                 alert('Please enter a valid amount');
                 return;
             }
 
             try {
-                const today = new Date().toISOString().split('T')[0];
+                const today = localDate(new Date());
                 const budgetRef = doc(db, 'users', currentUser.uid, 'budgets', currentMonth);
                 const docSnap = await getDoc(budgetRef);
 
@@ -478,50 +483,34 @@
                 const monthlyBudget = data.monthlyBudget;
                 const logs = data.logs || [];
 
-                const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+                const [cy, cm] = currentMonth.split('-').map(Number);
+                const daysInMonth = new Date(cy, cm, 0).getDate();
                 const dailyAllowance = monthlyBudget / daysInMonth;
-                const today = new Date().toISOString().split('T')[0];
-                const todayDate = new Date(today);
-                const todayDay = todayDate.getDate();
+                const todayDay = new Date().getDate();
 
                 document.getElementById('monthlyBudgetInput').value = monthlyBudget;
                 document.getElementById('monthlyBudgetDisplay').textContent = `$${monthlyBudget.toFixed(2)}`;
                 document.getElementById('dailyFixedDisplay').textContent = `$${dailyAllowance.toFixed(2)}`;
 
-                let cumulativeBalance = 0;
+                let rollover = 0;
                 let totalSpent = 0;
+                let todayBudget = dailyAllowance;
                 const logHtml = [];
                 const dailyData = [];
 
                 for (let day = 1; day <= todayDay; day++) {
-                    const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
+                    const dateStr = `${currentMonth}-${pad(day)}`;
                     const log = logs.find(l => l.date === dateStr);
+                    const budgetForDay = dailyAllowance + rollover;
+                    const spent = log ? log.amount : dailyAllowance;
 
-                    if (day < todayDay) {
-                        const spent = dailyAllowance;
-                        totalSpent += spent;
-
-                        dailyData.push({
-                            date: dateStr,
-                            fixed: dailyAllowance,
-                            cumulative: dailyAllowance
-                        });
-                    } else {
-                        const spent = log ? log.amount : dailyAllowance;
-                        totalSpent += spent;
-                        const difference = dailyAllowance - spent;
-                        cumulativeBalance += difference;
-
-                        dailyData.push({
-                            date: dateStr,
-                            fixed: dailyAllowance,
-                            cumulative: dailyAllowance + cumulativeBalance
-                        });
-                    }
+                    totalSpent += spent;
+                    dailyData.push({ date: dateStr, fixed: dailyAllowance, cumulative: budgetForDay });
+                    if (day === todayDay) todayBudget = budgetForDay;
+                    rollover += (dailyAllowance - spent);
 
                     if (log) {
-                        const dateObj = new Date(dateStr);
-                        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        const dayName = parseLocal(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                         logHtml.push(`
                             <div class="log-entry">
                                 <div class="log-entry-date">${dayName}</div>
@@ -531,9 +520,8 @@
                     }
                 }
 
-                const todayBudget = dailyData.length > 0 ? dailyData[dailyData.length - 1].cumulative : dailyAllowance;
                 document.getElementById('dailyCumulativeDisplay').textContent = `$${todayBudget.toFixed(2)}`;
-                document.getElementById('logList').innerHTML = logHtml.join('');
+                document.getElementById('logList').innerHTML = logHtml.join('') || '<div class="empty-state">No spending logged yet</div>';
 
                 updateDailyChart(dailyData, dailyAllowance);
                 updateMonthlyChart(monthlyBudget, totalSpent);
@@ -656,13 +644,19 @@
 
                 months.sort((a, b) => b.id.localeCompare(a.id));
 
+                const currentMonthStr = localDate(new Date()).slice(0, 7);
+                const todayDay = new Date().getDate();
+
                 let html = '';
                 for (const month of months) {
                     const monthId = month.id;
                     const logs = month.data.logs || [];
                     const monthlyBudget = month.data.monthlyBudget || 0;
-                    const daysInMonth = new Date(new Date(monthId + '-01').getFullYear(), new Date(monthId + '-01').getMonth() + 1, 0).getDate();
+                    const [my, mm] = monthId.split('-').map(Number);
+                    const daysInMonth = new Date(my, mm, 0).getDate();
                     const dailyAllowance = monthlyBudget / daysInMonth;
+                    const isCurrent = monthId === currentMonthStr;
+                    const lastDay = isCurrent ? todayDay : daysInMonth;
 
                     html += `
                         <div class="month-section">
@@ -670,30 +664,31 @@
                                 ${monthId}
                             </div>
                             <div class="month-content" id="month-${monthId}">
+                                <div class="day-row" style="font-weight:600;background:#eef1ff;">
+                                    <div>Day</div>
+                                    <div style="text-align:right">Spent</div>
+                                    <div style="text-align:right">Fixed</div>
+                                    <div style="text-align:right">Budget</div>
+                                </div>
                     `;
 
-                    let cumulativeBalance = 0;
-                    for (let day = 1; day <= daysInMonth; day++) {
-                        const dateStr = `${monthId}-${String(day).padStart(2, '0')}`;
+                    let rollover = 0;
+                    for (let day = 1; day <= lastDay; day++) {
+                        const dateStr = `${monthId}-${pad(day)}`;
                         const log = logs.find(l => l.date === dateStr);
-                        const spent = log ? log.amount : 0;
-                        const fixed = dailyAllowance;
+                        const budgetForDay = dailyAllowance + rollover;
+                        const spent = log ? log.amount : dailyAllowance;
+                        rollover += (dailyAllowance - spent);
 
-                        if (day <= new Date().getDate() && monthId === new Date().toISOString().slice(0, 7)) {
-                            const difference = dailyAllowance - spent;
-                            cumulativeBalance += difference;
-                        }
-                        const cumulative = cumulativeBalance + dailyAllowance;
-
-                        const date = new Date(dateStr);
-                        const dayName = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        const dayName = parseLocal(dateStr).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+                        const spentDisplay = log ? `$${log.amount.toFixed(2)}` : '—';
 
                         html += `
                             <div class="day-row">
                                 <div class="day-label">${dayName}</div>
-                                <div class="day-value">$${spent.toFixed(2)}</div>
-                                <div class="day-value">$${fixed.toFixed(2)}</div>
-                                <div class="day-value">$${cumulative.toFixed(2)}</div>
+                                <div class="day-value">${spentDisplay}</div>
+                                <div class="day-value">$${dailyAllowance.toFixed(2)}</div>
+                                <div class="day-value">$${budgetForDay.toFixed(2)}</div>
                             </div>
                         `;
                     }
@@ -722,7 +717,7 @@
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('appSection').classList.remove('hidden');
                 document.getElementById('userName').textContent = `${user.displayName || user.email}`;
-                currentMonth = new Date().toISOString().slice(0, 7);
+                currentMonth = localDate(new Date()).slice(0, 7);
                 await loadBudgetData();
             } else {
                 currentUser = null;
