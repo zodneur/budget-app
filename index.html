@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monthly Budget Tracker</title>
+    <title>Budget Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -14,36 +15,31 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             padding: 20px;
         }
         .container {
-            width: 100%;
-            max-width: 500px;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 24px;
+            max-width: 600px;
+            margin: 0 auto;
         }
         .header {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
-            border-bottom: 2px solid #f0f0f0;
-            padding-bottom: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         h1 {
             font-size: 24px;
             color: #333;
         }
-        .auth-section {
-            text-align: center;
-            padding: 40px 20px;
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
         }
-        .logout-btn, .login-btn {
+        button {
             background: #667eea;
             color: white;
             border: none;
@@ -51,18 +47,77 @@
             border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
+            font-weight: 600;
         }
-        .logout-btn:hover, .login-btn:hover {
+        button:hover {
             background: #5568d3;
         }
-        .login-btn {
-            padding: 12px 32px;
-            font-size: 16px;
+        .logout-btn {
+            background: #ef4444;
+        }
+        .logout-btn:hover {
+            background: #dc2626;
         }
         .hidden {
             display: none;
         }
-        .budget-section {
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .nav button {
+            flex: 1;
+            padding: 12px;
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid transparent;
+        }
+        .nav button.active {
+            background: #667eea;
+            color: white;
+        }
+        .page {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .page.hidden {
+            display: none;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .stat-box {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
             margin-bottom: 24px;
         }
         .form-group {
@@ -88,53 +143,31 @@
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        button {
+        .full-width-btn {
+            width: 100%;
+            padding: 12px;
             background: #667eea;
             color: white;
             border: none;
-            padding: 12px 20px;
             border-radius: 8px;
-            cursor: pointer;
             font-size: 15px;
             font-weight: 600;
-            width: 100%;
+            cursor: pointer;
+            margin-top: 12px;
         }
-        button:hover {
+        .full-width-btn:hover {
             background: #5568d3;
         }
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 24px;
+        .daily-log {
+            margin-top: 24px;
         }
-        .stat-box {
-            background: #f8f9fa;
-            padding: 16px;
-            border-radius: 12px;
-            text-align: center;
-            border-left: 4px solid #667eea;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #999;
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 16px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
-        .stat-box.positive .stat-value {
-            color: #10b981;
-        }
-        .stat-box.negative .stat-value {
-            color: #ef4444;
-        }
-        .daily-log {
-            margin-bottom: 24px;
         }
         .log-entry {
             background: #f8f9fa;
@@ -144,7 +177,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
         }
         .log-entry-date {
             font-weight: 600;
@@ -154,148 +186,97 @@
             font-weight: bold;
             color: #667eea;
         }
-        .log-entry-balance {
-            font-size: 12px;
-            color: #999;
-        }
-        .month-summary {
-            background: #f0f4ff;
-            padding: 16px;
-            border-radius: 12px;
+        .auth-section {
             text-align: center;
-            border: 2px solid #667eea;
+            padding: 40px 20px;
         }
-        .summary-label {
-            font-size: 12px;
-            color: #667eea;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-        .summary-status {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-        .summary-status.over {
-            color: #ef4444;
-        }
-        .summary-status.under {
-            color: #10b981;
-        }
-        .reset-btn {
-            background: #ef4444;
-            margin-top: 16px;
-            font-size: 14px;
-        }
-        .reset-btn:hover {
-            background: #dc2626;
+        .auth-section button {
+            padding: 12px 32px;
+            font-size: 16px;
         }
         .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: #999;
-        }
-        .section-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #666;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .budget-display {
-            background: #f0f4ff;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            font-size: 14px;
-        }
-        .budget-display-label {
             color: #999;
             font-size: 12px;
-            margin-bottom: 4px;
-        }
-        .budget-display-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #667eea;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>💰 Budget Tracker</h1>
-            <button class="logout-btn hidden" onclick="logout()">Logout</button>
-        </div>
-
+        <!-- Auth Section -->
         <div class="auth-section" id="authSection">
+            <h1 style="margin-bottom: 20px; color: #667eea;">💰 Budget Tracker</h1>
             <p style="margin-bottom: 20px; color: #666;">Sign in to track your monthly budget</p>
-            <button class="login-btn" onclick="login()">Sign in with Google</button>
+            <button onclick="login()">Sign in with Google</button>
         </div>
 
+        <!-- App Section -->
         <div class="hidden" id="appSection">
-            <div class="user-info">
-                <span id="userName"></span>
+            <div class="header">
+                <h1>💰 Budget Tracker</h1>
+                <div class="auth-buttons">
+                    <div class="user-info" id="userName"></div>
+                    <button class="logout-btn" onclick="logout()">Logout</button>
+                </div>
             </div>
 
-            <div class="budget-section">
-                <div class="section-title">Setup Budget</div>
+            <!-- Navigation -->
+            <div class="nav">
+                <button class="active" onclick="switchPage('dashboard')">Dashboard</button>
+                <button onclick="switchPage('settings')">Settings & Log</button>
+            </div>
+
+            <!-- Dashboard Page -->
+            <div id="dashboard" class="page">
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-label">Monthly Budget</div>
+                        <div class="stat-value" id="monthlyBudgetDisplay">$0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Daily Fixed</div>
+                        <div class="stat-value" id="dailyFixedDisplay">$0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Today's Budget</div>
+                        <div class="stat-value" id="dailyCumulativeDisplay">$0</div>
+                    </div>
+                </div>
+
+                <div class="section-title">Daily Budget Trend</div>
+                <div class="chart-container">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Settings & Log Page -->
+            <div id="settings" class="page hidden">
+                <div class="section-title">Set Monthly Budget</div>
                 <div class="form-group">
                     <label>Monthly Budget ($)</label>
-                    <input type="number" id="monthlyBudget" placeholder="e.g., 750" min="0" step="0.01">
+                    <input type="number" id="monthlyBudgetInput" placeholder="e.g., 750" min="0" step="0.01">
                 </div>
-                <button onclick="setupBudget()">Set Budget for This Month</button>
-            </div>
+                <button class="full-width-btn" onclick="setupBudget()">Set Budget</button>
 
-            <div class="stats hidden" id="statsSection">
-                <div class="stat-box">
-                    <div class="stat-label">Daily Allowance</div>
-                    <div class="stat-value" id="dailyAllowance">$0</div>
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #f0f0f0;">
+                    <div class="section-title">Monthly Overview</div>
+                    <div class="chart-container">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-label">Today's Budget</div>
-                    <div class="stat-value" id="todayBudget">$0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Total Spent</div>
-                    <div class="stat-value" id="totalSpent">$0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Remaining</div>
-                    <div class="stat-value" id="remaining">$0</div>
-                </div>
-            </div>
 
-            <div class="budget-section hidden" id="logSection">
-                <div class="section-title">Log Daily Spending</div>
-                <div class="budget-display">
-                    <div class="budget-display-label">Base Daily Budget</div>
-                    <div class="budget-display-value" id="baseDailyDisplay">$0</div>
-                </div>
-                <div class="budget-display">
-                    <div class="budget-display-label">Today's Adjusted Budget</div>
-                    <div class="budget-display-value" id="adjustedBudgetDisplay">$0</div>
-                </div>
-                <div class="form-group">
-                    <label>Amount Spent Today ($)</label>
-                    <input type="number" id="dailySpending" placeholder="e.g., 25" min="0" step="0.01">
-                </div>
-                <button onclick="logSpending()">Log Spending</button>
-            </div>
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #f0f0f0;">
+                    <div class="section-title">Log Daily Spending</div>
+                    <div class="form-group">
+                        <label>Amount Spent Today ($)</label>
+                        <input type="number" id="dailySpendingInput" placeholder="e.g., 25" min="0" step="0.01">
+                    </div>
+                    <button class="full-width-btn" onclick="logSpending()">Log Spending</button>
 
-            <div class="daily-log hidden" id="dailyLogSection">
-                <div class="section-title">This Month's Log</div>
-                <div id="logList"></div>
-            </div>
-
-            <div class="month-summary hidden" id="summarySection">
-                <div class="summary-label">Month Summary</div>
-                <div class="summary-status" id="summaryStatus">On Track</div>
-                <button class="reset-btn" onclick="resetMonth()">Reset for Next Month</button>
+                    <div class="daily-log">
+                        <div class="section-title" style="margin-top: 24px;">This Month's Log</div>
+                        <div id="logList"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -319,6 +300,8 @@
         const db = getFirestore(app);
         let currentUser = null;
         let currentMonth = new Date().toISOString().slice(0, 7);
+        let dailyChart = null;
+        let monthlyChart = null;
 
         window.login = async function() {
             try {
@@ -337,8 +320,23 @@
             }
         };
 
+        window.switchPage = function(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+
+            if (page === 'dashboard') {
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.querySelectorAll('.nav button')[0].classList.add('active');
+                if (dailyChart) updateDailyChart();
+            } else {
+                document.getElementById('settings').classList.remove('hidden');
+                document.querySelectorAll('.nav button')[1].classList.add('active');
+                if (monthlyChart) updateMonthlyChart();
+            }
+        };
+
         window.setupBudget = async function() {
-            const amount = parseFloat(document.getElementById('monthlyBudget').value);
+            const amount = parseFloat(document.getElementById('monthlyBudgetInput').value);
             if (!amount || amount <= 0) {
                 alert('Please enter a valid budget amount');
                 return;
@@ -360,7 +358,7 @@
         };
 
         window.logSpending = async function() {
-            const amount = parseFloat(document.getElementById('dailySpending').value);
+            const amount = parseFloat(document.getElementById('dailySpendingInput').value);
             if (!amount || amount < 0) {
                 alert('Please enter a valid amount');
                 return;
@@ -388,7 +386,7 @@
                 logs.sort((a, b) => new Date(a.date) - new Date(b.date));
 
                 await updateDoc(budgetRef, { logs });
-                document.getElementById('dailySpending').value = '';
+                document.getElementById('dailySpendingInput').value = '';
                 await loadBudgetData();
             } catch (error) {
                 alert('Failed to log spending: ' + error.message);
@@ -401,10 +399,6 @@
                 const docSnap = await getDoc(budgetRef);
 
                 if (!docSnap.exists()) {
-                    document.getElementById('statsSection').classList.add('hidden');
-                    document.getElementById('logSection').classList.add('hidden');
-                    document.getElementById('dailyLogSection').classList.add('hidden');
-                    document.getElementById('summarySection').classList.add('hidden');
                     return;
                 }
 
@@ -415,104 +409,177 @@
                 const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
                 const dailyAllowance = monthlyBudget / daysInMonth;
 
-                document.getElementById('monthlyBudget').value = monthlyBudget;
-                document.getElementById('dailyAllowance').textContent = `$${dailyAllowance.toFixed(2)}`;
-                document.getElementById('statsSection').classList.remove('hidden');
-                document.getElementById('logSection').classList.remove('hidden');
-                document.getElementById('baseDailyDisplay').textContent = `$${dailyAllowance.toFixed(2)}`;
+                document.getElementById('monthlyBudgetInput').value = monthlyBudget;
+                document.getElementById('monthlyBudgetDisplay').textContent = `$${monthlyBudget.toFixed(2)}`;
+                document.getElementById('dailyFixedDisplay').textContent = `$${dailyAllowance.toFixed(2)}`;
 
                 let cumulativeBalance = 0;
                 let totalSpent = 0;
                 const logHtml = [];
+                const dailyData = [];
 
-                logs.forEach((log) => {
-                    const spent = log.amount;
-                    const dayAllowance = dailyAllowance;
-                    const difference = dayAllowance - spent;
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
+                    const log = logs.find(l => l.date === dateStr);
+                    const spent = log ? log.amount : 0;
+                    const difference = dailyAllowance - spent;
                     cumulativeBalance += difference;
                     totalSpent += spent;
 
-                    const displayBalance = cumulativeBalance + dailyAllowance;
-                    const dateObj = new Date(log.date);
-                    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    dailyData.push({
+                        date: dateStr,
+                        fixed: dailyAllowance,
+                        cumulative: cumulativeBalance + dailyAllowance
+                    });
 
-                    logHtml.push(`
-                        <div class="log-entry">
-                            <div>
+                    if (log) {
+                        const dateObj = new Date(dateStr);
+                        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        logHtml.push(`
+                            <div class="log-entry">
                                 <div class="log-entry-date">${dayName}</div>
-                                <div class="log-entry-balance">Budget: $${displayBalance.toFixed(2)}</div>
+                                <div class="log-entry-amount">$${spent.toFixed(2)}</div>
                             </div>
-                            <div class="log-entry-amount">-$${spent.toFixed(2)}</div>
-                        </div>
-                    `);
-                });
-
-                document.getElementById('logList').innerHTML = logHtml.join('');
-                document.getElementById('totalSpent').textContent = `$${totalSpent.toFixed(2)}`;
-
-                const today = new Date().toISOString().split('T')[0];
-                const todayAdjustedBudget = dailyAllowance + cumulativeBalance;
-
-                document.getElementById('adjustedBudgetDisplay').textContent = `$${todayAdjustedBudget.toFixed(2)}`;
-                document.getElementById('todayBudget').textContent = `$${todayAdjustedBudget.toFixed(2)}`;
-
-                const remaining = monthlyBudget - totalSpent;
-                const remainingBox = document.getElementById('remaining');
-                remainingBox.textContent = `$${remaining.toFixed(2)}`;
-                remainingBox.parentElement.classList.remove('positive', 'negative');
-                remainingBox.parentElement.classList.add(remaining >= 0 ? 'positive' : 'negative');
-
-                if (logs.length > 0) {
-                    document.getElementById('dailyLogSection').classList.remove('hidden');
-                    const statusEl = document.getElementById('summaryStatus');
-                    statusEl.parentElement.parentElement.classList.remove('hidden');
-
-                    if (remaining >= 0) {
-                        statusEl.textContent = `On track! $${remaining.toFixed(2)} remaining`;
-                        statusEl.classList.remove('over');
-                        statusEl.classList.add('under');
-                    } else {
-                        statusEl.textContent = `Over budget by $${Math.abs(remaining).toFixed(2)}`;
-                        statusEl.classList.remove('under');
-                        statusEl.classList.add('over');
+                        `);
                     }
                 }
+
+                const today = new Date().toISOString().split('T')[0];
+                const todayLog = logs.find(l => l.date === today);
+                let todayBudget = dailyAllowance;
+                if (todayLog) {
+                    const todayIndex = dailyData.findIndex(d => d.date === today);
+                    if (todayIndex >= 0) {
+                        todayBudget = dailyData[todayIndex].cumulative;
+                    }
+                } else {
+                    if (dailyData.length > 0) {
+                        const lastDay = dailyData.findIndex(d => d.date === today);
+                        if (lastDay > 0) {
+                            todayBudget = dailyData[lastDay - 1].cumulative + dailyAllowance;
+                        }
+                    }
+                }
+
+                document.getElementById('dailyCumulativeDisplay').textContent = `$${todayBudget.toFixed(2)}`;
+                document.getElementById('logList').innerHTML = logHtml.join('');
+
+                updateDailyChart(dailyData, dailyAllowance);
+                updateMonthlyChart(monthlyBudget, totalSpent);
             } catch (error) {
                 console.error('Load error:', error);
             }
         }
 
-        window.resetMonth = async function() {
-            if (!confirm('This will reset the budget for next month. Continue?')) return;
+        function updateDailyChart(dailyData, dailyAllowance) {
+            const ctx = document.getElementById('dailyChart');
+            if (!ctx) return;
 
-            try {
-                currentMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString().slice(0, 7);
-                document.getElementById('monthlyBudget').value = '';
-                document.getElementById('dailySpending').value = '';
-                document.getElementById('statsSection').classList.add('hidden');
-                document.getElementById('logSection').classList.add('hidden');
-                document.getElementById('dailyLogSection').classList.add('hidden');
-                document.getElementById('summarySection').classList.add('hidden');
-                await loadBudgetData();
-            } catch (error) {
-                alert('Failed to reset');
+            const labels = dailyData.map(d => {
+                const date = new Date(d.date);
+                return date.getDate();
+            });
+
+            const fixedData = dailyData.map(d => d.fixed);
+            const cumulativeData = dailyData.map(d => d.cumulative);
+
+            if (dailyChart) {
+                dailyChart.data.labels = labels;
+                dailyChart.data.datasets[0].data = fixedData;
+                dailyChart.data.datasets[1].data = cumulativeData;
+                dailyChart.update();
+            } else {
+                dailyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Daily Fixed Budget',
+                                data: fixedData,
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2
+                            },
+                            {
+                                label: 'Daily Cumulative Budget',
+                                data: cumulativeData,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
             }
-        };
+        }
+
+        function updateMonthlyChart(monthlyBudget, totalSpent) {
+            const ctx = document.getElementById('monthlyChart');
+            if (!ctx) return;
+
+            const remaining = monthlyBudget - totalSpent;
+
+            if (monthlyChart) {
+                monthlyChart.data.datasets[0].data = [monthlyBudget, totalSpent, remaining > 0 ? remaining : 0];
+                monthlyChart.update();
+            } else {
+                monthlyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Budget', 'Spent', 'Remaining'],
+                        datasets: [{
+                            label: 'Amount ($)',
+                            data: [monthlyBudget, totalSpent, remaining > 0 ? remaining : 0],
+                            backgroundColor: ['#667eea', '#ef4444', '#10b981']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('appSection').classList.remove('hidden');
-                document.querySelector('.logout-btn').classList.remove('hidden');
-                document.getElementById('userName').textContent = `Logged in as ${user.displayName || user.email}`;
+                document.getElementById('userName').textContent = `${user.displayName || user.email}`;
                 currentMonth = new Date().toISOString().slice(0, 7);
                 await loadBudgetData();
             } else {
                 currentUser = null;
                 document.getElementById('authSection').classList.remove('hidden');
                 document.getElementById('appSection').classList.add('hidden');
-                document.querySelector('.logout-btn').classList.add('hidden');
             }
         });
     </script>
