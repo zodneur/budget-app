@@ -188,6 +188,26 @@
             font-weight: bold;
             color: #667eea;
         }
+        .log-entry-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .delete-log {
+            background: transparent;
+            color: #ef4444;
+            border: none;
+            padding: 4px 8px;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            width: auto;
+            font-weight: 700;
+            border-radius: 6px;
+        }
+        .delete-log:hover {
+            background: #fee2e2;
+        }
         .auth-section {
             text-align: center;
             padding: 40px 20px;
@@ -527,6 +547,22 @@
             }
         };
 
+        window.deleteSpending = async function(dateStr) {
+            if (!confirm(`Delete the entry for ${dateStr}?`)) return;
+
+            try {
+                const budgetRef = doc(db, 'users', currentUser.uid, 'budgets', currentMonth);
+                const docSnap = await getDoc(budgetRef);
+                if (!docSnap.exists()) return;
+
+                const logs = (docSnap.data().logs || []).filter(l => l.date !== dateStr);
+                await updateDoc(budgetRef, { logs });
+                await loadBudgetData();
+            } catch (error) {
+                alert('Failed to delete: ' + error.message);
+            }
+        };
+
         async function loadBudgetData() {
             try {
                 const budgetRef = doc(db, 'users', currentUser.uid, 'budgets', currentMonth);
@@ -583,7 +619,10 @@
                         logHtml.push(`
                             <div class="log-entry">
                                 <div class="log-entry-date">${dayName}</div>
-                                <div class="log-entry-amount">$${log.amount.toFixed(2)}</div>
+                                <div class="log-entry-right">
+                                    <div class="log-entry-amount">$${log.amount.toFixed(2)}</div>
+                                    <button class="delete-log" onclick="deleteSpending('${dateStr}')" title="Delete entry">✕</button>
+                                </div>
                             </div>
                         `);
                     }
