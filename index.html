@@ -276,6 +276,33 @@
         .day-row.projected .day-value {
             color: #f59e0b;
         }
+        .status {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            font-weight: 700;
+            margin-right: 4px;
+        }
+        .status.logged {
+            color: #10b981;
+        }
+        .status.missed {
+            color: #ef4444;
+        }
+        .status.pending {
+            color: #9ca3af;
+        }
+        .history-legend {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .history-legend b {
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -365,6 +392,11 @@
             <!-- History Page -->
             <div id="history" class="page hidden">
                 <div class="section-title">All Months</div>
+                <div class="history-legend">
+                    <span><b style="color:#10b981;">✓</b> logged</span>
+                    <span><b style="color:#ef4444;">✗</b> forgot</span>
+                    <span><b style="color:#9ca3af;">•</b> today, not yet</span>
+                </div>
                 <div id="historyContent"></div>
             </div>
         </div>
@@ -701,6 +733,8 @@
                     const daysInMonth = new Date(my, mm, 0).getDate();
                     const dailyAllowance = monthlyBudget / daysInMonth;
                     const isCurrent = monthId === currentMonthStr;
+                    const loggedDays = new Set(logs.map(l => Number(l.date.split('-')[2])));
+                    const startDay = logs.length ? Math.min(...loggedDays) : null;
 
                     html += `
                         <div class="month-section">
@@ -728,9 +762,20 @@
                         const dayName = parseLocal(dateStr).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
                         const spentDisplay = log ? `$${log.amount.toFixed(2)}` : '—';
 
+                        let status = '';
+                        if (startDay !== null && day >= startDay && !isFuture) {
+                            if (loggedDays.has(day)) {
+                                status = '<span class="status logged">✓</span>';
+                            } else if (isCurrent && day === todayDay) {
+                                status = '<span class="status pending">•</span>';
+                            } else {
+                                status = '<span class="status missed">✗</span>';
+                            }
+                        }
+
                         html += `
                             <div class="day-row${isFuture ? ' projected' : ''}">
-                                <div class="day-label">${dayName}</div>
+                                <div class="day-label">${status}${dayName}</div>
                                 <div class="day-value">${spentDisplay}</div>
                                 <div class="day-value">$${dailyAllowance.toFixed(2)}</div>
                                 <div class="day-value">$${budgetForDay.toFixed(2)}</div>
