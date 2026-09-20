@@ -586,7 +586,7 @@
                 document.getElementById('dailyFixedDisplay').textContent = `$${dailyAllowance.toFixed(2)}`;
 
                 let rollover = 0;
-                let totalSpent = 0;
+                let spentSoFar = 0;
                 let todayBudget = dailyAllowance;
                 let todaySpent = 0;
                 const logHtml = [];
@@ -610,7 +610,10 @@
                         todayBudget = budgetForDay;
                         todaySpent = log ? log.amount : 0;
                     }
-                    if (day <= todayDay) totalSpent += spent;
+                    // Total spent: past unlogged days are assumed spent; today counts only if
+                    // actually logged (0 / pending otherwise); future days are not counted.
+                    if (day < todayDay) spentSoFar += spent;
+                    else if (day === todayDay && log) spentSoFar += log.amount;
 
                     rollover += (dailyAllowance - spent);
 
@@ -640,7 +643,7 @@
                 document.getElementById('logList').innerHTML = logHtml.join('') || '<div class="empty-state">No spending logged yet</div>';
 
                 updateDailyChart(labels, fixedData, cumulativeData, todayDay);
-                updateMonthlyChart(monthlyBudget, totalSpent);
+                updateMonthlyChart(monthlyBudget, spentSoFar);
             } catch (error) {
                 console.error('Load error:', error);
             }
@@ -709,10 +712,12 @@
             const ctx = document.getElementById('monthlyChart');
             if (!ctx) return;
 
+            const round2 = v => Math.round(v * 100) / 100;
             const remaining = monthlyBudget - totalSpent;
+            const barData = [round2(monthlyBudget), round2(totalSpent), round2(remaining > 0 ? remaining : 0)];
 
             if (monthlyChart) {
-                monthlyChart.data.datasets[0].data = [monthlyBudget, totalSpent, remaining > 0 ? remaining : 0];
+                monthlyChart.data.datasets[0].data = barData;
                 monthlyChart.update();
             } else {
                 monthlyChart = new Chart(ctx, {
@@ -721,7 +726,7 @@
                         labels: ['Budget', 'Spent', 'Remaining'],
                         datasets: [{
                             label: 'Amount ($)',
-                            data: [monthlyBudget, totalSpent, remaining > 0 ? remaining : 0],
+                            data: barData,
                             backgroundColor: ['#667eea', '#ef4444', '#10b981']
                         }]
                     },
